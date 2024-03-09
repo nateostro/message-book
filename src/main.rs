@@ -290,5 +290,5 @@ fn main() {
 
     iter_messages(&db_path, &args.recipient, &args.output_dir, &config).expect("failed :(");
 
-    println!("Finished! Exported to output folder")
+    println!("Finished! Exported to output folder");
 }

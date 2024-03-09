@@ -5,32 +5,59 @@ use imessage_database::{
 };
 use regex::Regex;
 use reqwest::blocking::Client;
-use select::document::Document;
-use select::predicate::Name;
+use scraper::{Html, Selector};
 
-// Function to fetch the title of a webpage
-fn fetch_title(url: &str) -> Option<String> {
+// Asynchronous function to fetch the title of a webpage
+fn fetch_title(url: &str) -> Result<Option<String>, Box<dyn std::error::Error>> {
     let client = Client::new();
-    let res = client.get(url).send().ok()?;
-    let body = res.text().ok()?;
-    let document = Document::from(body.as_str());
+    let res = client.get(url).send()?;
+    let body: String = res.text()?;
+    let document = Html::parse_document(&body);
+    let selector = Selector::parse("title").unwrap();
 
-    document.find(Name("title")).next().map(|n| n.text())
+    Ok(document
+        .select(&selector)
+        .next()
+        .map(|n| n.text().collect()))
 }
 
 /// Make necessary replacements so that the text is ready for insertion
 /// into latex
 fn latex_escape(text: String) -> String {
-    // Regular expression to match URLs
+    let url_regex = Regex::new(r"https?://[^\s]+").expect("Invalid URL regex");
+    let urls: Vec<&str> = url_regex.find_iter(&text).map(|m| m.as_str()).collect();
 
-    // TODO: gotta be a more efficient way to do this
-    let escaped = text
-        // first, a bunch of weird characters replaced with ascii
+    // A map to hold the URL to title mappings
+    let mut url_to_title = std::collections::HashMap::new();
+
+    // Fetch titles for each URL
+    for &url in &urls {
+        if let Ok(Some(title)) = fetch_title(url) {
+            // Simplify the title by replacing newlines and tabs with spaces
+            let simplified_title = title.replace('\n', " ").replace('\t', " ");
+            url_to_title.insert(url, simplified_title);
+        }
+    }
+
+    // Replace URLs with their titles in the text
+    let escaped = url_regex
+        .replace_all(&text, |caps: &regex::Captures| {
+            let url = &caps[0];
+            let core_part = url.split('/').nth(2).unwrap_or(url);
+            if let Some(title) = url_to_title.get(url) {
+                format!("(link: {}, {})", core_part, title)
+            } else {
+                format!("(link: {})", core_part)
+            }
+        })
+        .to_string();
+
+    // Perform the rest of the replacements as before
+    let escaped = escaped
         .replace("’", "'")
         .replace("“", "\"")
         .replace("”", "\"")
         .replace("…", "...")
-        // now, actual latex escapes
         .replace(r"\", r"\textbackslash\ ")
         .replace("$", r"\$")
         .replace("%", r"\%")
@@ -41,35 +68,12 @@ fn latex_escape(text: String) -> String {
         .replace("#", r"\#")
         .replace(r"{", r"\{")
         .replace(r"}", r"\}")
-        .replace("\n", "\\newline\n") // since a single newline in latex doesn't make a line break, need to add explicit newlines
-        // this last one is the "variation selector" which I think determines whether an emoji
-        // should be displayed big or inline. The latex font doesn't support it, so we just strip it out.
-        // More info here: https://stackoverflow.com/questions/38100329/what-does-u-ufe0f-in-an-emoji-mean-is-it-the-same-if-i-delete-it
+        .replace("\n", "\\newline\n")
         .replace("\u{FE0F}", "");
 
-    let url_regex = Regex::new(r"https?://[^\s]+").expect("Invalid URL regex");
-
-    // Wrap URLs with \url{}
-    // Process URLs
-    let escaped = url_regex
-        .replace_all(&escaped, |caps: &regex::Captures| {
-            let url = &caps[0];
-            let core_part = url.split('/').nth(2).unwrap_or(url);
-            if let Some(mut title) = fetch_title(url) {
-                // Remove all newline or tab characters from the title, replacing them with spaces
-                title = title.replace('\n', " ").replace('\t', " ");
-                format!("(🔗 {}, {})", core_part, title)
-            } else {
-                format!("(🔗 {})", core_part)
-            }
-        })
-        .to_string();
-
-    // Now, we wrap emojis in {\emojifont XX}. The latex template has a different font for emojis, and
-    // this allows emojis to use that font
-    // TODO: Somehow move this regex out so we only compile it once
+    // Emoji replacement
     let emoji_regex =
-        Regex::new(r"(\p{Extended_Pictographic}+)").expect("Couldn't compile demoji regex");
+        Regex::new(r"(\p{Extended_Pictographic}+)").expect("Couldn't compile emoji regex");
     let demojid = emoji_regex
         .replace_all(&escaped, "{\\emojifont $1}")
         .into_owned();
