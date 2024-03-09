@@ -15,6 +15,7 @@ use imessage_database::{
 };
 use render::render_message;
 use rusqlite::types::Value;
+use std::fs;
 use std::{
     fs::{copy, create_dir_all, File},
     io::{Read, Write},
@@ -26,6 +27,20 @@ mod render;
 
 const TEMPLATE_DIR: &str = "templates";
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct Config {
+    title: String,
+    copyright: String,
+    dedication_title: String,
+    dedication_message: String,
+    preface: Option<String>,
+}
+
+fn load_config(config_path: &Path) -> Result<Config, Box<dyn std::error::Error>> {
+    let config_file = fs::File::open(config_path)?;
+    let config: Config = serde_json::from_reader(config_file)?;
+    Ok(config)
+}
 // default ios sms.db path is <backup-path>/3d/3d0d7e5fb2ce288813306e4d4636395e047a3d2
 
 #[derive(Parser)]
@@ -83,6 +98,7 @@ fn iter_messages(
     db_path: &PathBuf,
     chat_identifier: &str,
     output_dir: &PathBuf,
+    config: &Config,
 ) -> Result<(), TableError> {
     println!("Inside iter_messages, using db path: {:?}", db_path);
     let db = get_connection(db_path).unwrap();
@@ -147,7 +163,7 @@ fn iter_messages(
 
     let mut chapters: Vec<String> = vec![];
     let mut current_output_info: Option<(String, File)> = None;
-    let mut last_message_side: Option<bool> = None; // Track the side of the last message
+    // let mut last_message_side: Option<bool> = None; // Track the side of the last message
 
     for mut msg in filtered_msgs {
         let msg_date = msg
@@ -177,12 +193,12 @@ fn iter_messages(
             .expect("Could not write to chapter file");
             current_output_info = Some((chapter_name.clone(), f));
             chapters.push(chapter_name);
-            last_message_side = None; // Reset for each new chapter
+            // last_message_side = None; // Reset for each new chapter
         }
 
         // Determine if \insertextraspace should be inserted
-        let insert_extra_space = last_message_side == Some(msg.is_from_me);
-        last_message_side = Some(msg.is_from_me); // Update last message side
+        let insert_extra_space = false; //last_message_side == Some(msg.is_from_me);
+                                        // last_message_side = Some(msg.is_from_me); // Update last message side
 
         match msg.gen_text(&db) {
             Ok(_) => {
@@ -213,6 +229,25 @@ fn iter_messages(
     main_template_file
         .read_to_string(&mut main_template)
         .expect("could not read template main.tex");
+
+    // Replace placeholders in the template with actual values from `config`
+    main_template = main_template.replace("iMessage Book", &config.title);
+    main_template = main_template.replace("ALL RIGHTS RESERVED", &config.copyright);
+    main_template = main_template.replace(
+        "\\begin{center}\n  \\textit{Dedicated to you.}\n\\end{center}",
+        &format!(
+            "\\begin{{center}}\n  \\textit{{{}}}\n\\end{{center}}\n\\begin{{center}}\n  \\textit{{{}}}\n\\end{{center}}",
+            config.dedication_title, config.dedication_message
+        ),
+    );
+    if let Some(ref preface) = config.preface {
+        let preface_section = format!("\\chapter*{{Preface}}\n{}\n\\mainmatter\n", preface);
+        // Insert the preface section before \mainmatter
+        if let Some(pos) = main_template.find("\\mainmatter") {
+            main_template.insert_str(pos, &preface_section);
+        }
+    }
+
     let mut main_tex_file = File::create(Path::join(output_dir, "main.tex"))
         .expect("could not create main.tex in output dir");
     main_tex_file
@@ -251,7 +286,9 @@ fn iter_messages(
 fn main() {
     let args = Args::parse();
     let db_path = args.get_db_location();
-    iter_messages(&db_path, &args.recipient, &args.output_dir).expect("failed :(");
+    let config = load_config(Path::new("config.json")).expect("Failed to load config");
 
-    println!("Hello!")
+    iter_messages(&db_path, &args.recipient, &args.output_dir, &config).expect("failed :(");
+
+    println!("Finished! Exported to output folder")
 }

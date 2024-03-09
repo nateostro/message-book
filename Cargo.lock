@@ -827,6 +827,8 @@ dependencies = [
  "reqwest",
  "rusqlite",
  "select",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -16,7 +16,6 @@
 \usepackage[Latin,Greek,Emoticons]{ucharclasses}
 \usepackage{fontspec}
 \usepackage{url}
-\newcommand{\insertextraspace}{\vspace{0.5mm}}
  
 \newfontfamily\emojifont{NotoEmoji-Medium.ttf}
 % \setDefaultTransitions{\mydef}{}
@@ -39,14 +38,14 @@
     #1
   \end{flushright}
 \end{minipage}
-\vspace{1mm}
+\vspace{1.5mm}
 }
 
 \newcommand{\leftmsg}[1]{
 \noindent\begin{minipage}{0.8\textwidth}
   #1
 \end{minipage}
-\vspace{1mm}
+\vspace{1.5mm}
 }
 
 
