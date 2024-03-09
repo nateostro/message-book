@@ -4,6 +4,19 @@ use imessage_database::{
     util::dates::get_offset,
 };
 use regex::Regex;
+use reqwest::blocking::Client;
+use select::document::Document;
+use select::predicate::Name;
+
+// Function to fetch the title of a webpage
+fn fetch_title(url: &str) -> Option<String> {
+    let client = Client::new();
+    let res = client.get(url).send().ok()?;
+    let body = res.text().ok()?;
+    let document = Document::from(body.as_str());
+
+    document.find(Name("title")).next().map(|n| n.text())
+}
 
 /// Make necessary replacements so that the text is ready for insertion
 /// into latex
@@ -37,7 +50,20 @@ fn latex_escape(text: String) -> String {
     let url_regex = Regex::new(r"https?://[^\s]+").expect("Invalid URL regex");
 
     // Wrap URLs with \url{}
-    let escaped = url_regex.replace_all(&escaped, r"\url{$0}").to_string();
+    // Process URLs
+    let escaped = url_regex
+        .replace_all(&escaped, |caps: &regex::Captures| {
+            let url = &caps[0];
+            let core_part = url.split('/').nth(2).unwrap_or(url);
+            if let Some(mut title) = fetch_title(url) {
+                // Remove all newline or tab characters from the title, replacing them with spaces
+                title = title.replace('\n', " ").replace('\t', " ");
+                format!("(🔗 {}, {})", core_part, title)
+            } else {
+                format!("(🔗 {})", core_part)
+            }
+        })
+        .to_string();
 
     // Now, we wrap emojis in {\emojifont XX}. The latex template has a different font for emojis, and
     // this allows emojis to use that font
