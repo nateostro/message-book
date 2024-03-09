@@ -15,8 +15,10 @@
 \usepackage[T1]{fontenc}
 \usepackage[Latin,Greek,Emoticons]{ucharclasses}
 \usepackage{fontspec}
+\usepackage{url}
+\newcommand{\insertextraspace}{\vspace{0.5mm}}
  
-\newfontfamily\emojifont{Noto Emoji}
+\newfontfamily\emojifont{NotoEmoji-Medium.ttf}
 % \setDefaultTransitions{\mydef}{}
 % \newfontfamily\mynormal{Noto Sans}
 % \setTransitionsForLatin{\mynormal}{}

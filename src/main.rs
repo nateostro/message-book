@@ -145,45 +145,49 @@ fn iter_messages(
     let filtered_msgs =
         msgs.filter(|m| !m.is_reaction() && !m.is_announcement() && !m.is_shareplay());
 
-    let mut chapters: Vec<String> = vec![]; // the names of the chapters created, like 2020-11
-    let mut current_output_info: Option<(String, File)> = None; // chapter_name, File
+    let mut chapters: Vec<String> = vec![];
+    let mut current_output_info: Option<(String, File)> = None;
+    let mut last_message_side: Option<bool> = None; // Track the side of the last message
+
     for mut msg in filtered_msgs {
-        // this is a mess. Basically we are updating current_output_file to be correct for the current message.
-        // Since the messages are in chronological order, marching through messages and updating this, creating
-        // files as necessary, should work
         let msg_date = msg
             .date(&get_offset())
             .expect("could not find date for message");
         let chapter_name = msg_date.format("ch-%Y-%m").to_string();
         let out_fname = format!("{}.tex", &chapter_name);
+
+        // Determine if a new chapter file needs to be created
         let create = match &current_output_info {
             None => true,
             Some((ref name, _)) => name != &chapter_name,
         };
+
         if create {
-            println!("Starting chapter {}", &chapter_name);
             let out_path = Path::join(output_dir, &out_fname);
-            let mut f = File::create(&out_path)
-                // .expect("failed to create output file")
-                .unwrap_or_else(|e| {
-                    panic!(
-                        "Failed to create output file: {} - {:?}",
-                        &out_path.to_string_lossy(),
-                        e
-                    )
-                });
+            let mut f = File::create(&out_path).unwrap_or_else(|e| {
+                panic!(
+                    "Failed to create output file: {} - {:?}",
+                    &out_path.to_string_lossy(),
+                    e
+                )
+            });
             f.write(
                 format!("\\chapter{{{}}}\n\n", msg_date.format("%B %Y").to_string()).as_bytes(),
             )
             .expect("Could not write to chapter file");
             current_output_info = Some((chapter_name.clone(), f));
             chapters.push(chapter_name);
+            last_message_side = None; // Reset for each new chapter
         }
+
+        // Determine if \insertextraspace should be inserted
+        let insert_extra_space = last_message_side == Some(msg.is_from_me);
+        last_message_side = Some(msg.is_from_me); // Update last message side
 
         match msg.gen_text(&db) {
             Ok(_) => {
-                // Successfully generated message, proceed with rendering and writing to output file
-                let rendered = render_message(&msg);
+                // Adjust the call to render_message to pass the new parameter
+                let rendered = render_message(&msg, insert_extra_space); // Adjusted to pass insert_extra_space
                 let mut output_file = &current_output_info
                     .as_ref()
                     .expect("Current output info was none while processing message")
@@ -193,7 +197,6 @@ fn iter_messages(
                     .expect("Unable to write message to output file");
             }
             Err(err) => {
-                // Handle the error gracefully, you can log it or ignore it depending on your requirements
                 eprintln!("Failed to generate message: {:?}", err);
             }
         }
@@ -222,6 +225,12 @@ fn iter_messages(
             .write(format!("\\include{{{}}}\n", chapter_name).as_bytes())
             .expect("failed to write main file");
     });
+
+    // Copy the emoji font file to the output folder
+    let emoji_font_source = Path::new("tex/NotoEmoji-Medium.ttf");
+    let emoji_font_destination = output_dir.join("NotoEmoji-Medium.ttf");
+    std::fs::copy(emoji_font_source, &emoji_font_destination)
+        .expect("Could not copy emoji font file");
 
     // and finish it with \end{document}
     // TODO: we should really do this with a templating engine

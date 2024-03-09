@@ -14,13 +14,14 @@
 \usepackage{fontspec}
 \usepackage{microtype}
 \usepackage{palatino}
+\usepackage{url}
 
 % % set up font to support emojis - requires xetex
 \usepackage[T1]{fontenc}
 \usepackage[Latin,Greek,Emoticons]{ucharclasses}
 \usepackage{fontspec}
  
-\newfontfamily\emojifont{Noto Emoji Medium}
+\newfontfamily\emojifont{NotoEmoji-Medium.ttf}
 % \setDefaultTransitions{\mydef}{}
 % \newfontfamily\mynormal{Noto Sans}
 % \setTransitionsForLatin{\mynormal}{}
@@ -30,6 +31,7 @@
 \makeoddhead{messagebookstyle}{\slshape\rightmark}{}{\thepage}
 
 \pagestyle{messagebookstyle}
+\newcommand{\insertextraspace}{\vspace{1.5mm}}
 
 
 
@@ -55,7 +57,43 @@
 }
 
 
+%%% experimental by me
+\setlength{\emergencystretch}{3em} % Allows additional stretching
+%%%
 %%% BEGIN DOCUMENT
+
+
+\usepackage{url} % Make sure this is in your preamble
+
+% Modify your custom commands to handle URLs properly
+\newcommand{\leftmsg}[2][0]{%
+\noindent\begin{minipage}{0.8\textwidth}
+  \ifnum#1>0
+    \hspace*{5mm}\url{#2}% Adjust 5mm to your preference for indent size and use \url for proper URL handling
+  \else
+    \url{#2}
+  \fi
+\end{minipage}
+\vspace{1mm}% You can adjust this space for separate messages
+}
+
+\newcommand{\rightmsg}[2][0]{%
+\noindent\hfill%
+\begin{minipage}{0.8\textwidth}
+  \begin{flushright}
+    \ifnum#1>0
+      \hspace*{-5mm}\url{#2}% Adjust -5mm to your preference for indent size and use \url for proper URL handling
+    \else
+      \url{#2}
+    \fi
+  \end{flushright}
+\end{minipage}
+\vspace{1mm}% You can adjust this space for separate messages
+}
+%%
+
+
+
 
 \begin{document}
 
@@ -103,9 +141,14 @@ ALL RIGHTS RESERVED OR COPYRIGHT LICENSE LANGUAGE
 {\emojifont
 😀😃😄😁😆😅😂🤣🥲🥹 ☺️😊😇🙂🙃😉😌😍🥰😘😗😙 😚😋😛😝😜🤪🤨🧐🤓😎🥸 🤩🥳😏😒😞😔😟😕🙁☹️😣 😖😫😩🥺😢😭😮‍💨 😤😠😡🤬🤯😳🥵🥶😱😨 😰😥😓🫣🤗🫡🤔🫢🤭🤫 🤥😶😶‍🌫️😐😑😬🫨🫠🙄😯😦 😧😮😲🥱😴🤤😪😵😵‍💫🫥🤐🥴🤢🤮 🤧😷🤒🤕🤑🤠😈👿👹👺🤡💩👻 💀☠️👽👾🤖🎃😺😸 😹😻😼😽🙀😿😾}
 
+\leftmsg{https://open.spotify.com/track/5M330VM7N8gPrYfia5nf25?si=NNhfy1IRRsiVsJqIM\_AfFQ}
+
 \leftmsg{Oh, great! How about for you?}
 
 \rightmsg{Swell}
+\insertextraspace % Adds extra space between unique messages of the same type
+
+\rightmsg{I just went to the vintage shop and I got there some sweaters and a funky vintage shirt and like a middle aged mom dress and I'm so excited to wear them all}
 
 \leftmsg{Awesome}
 
