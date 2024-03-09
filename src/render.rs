@@ -26,20 +26,35 @@ fn fetch_title(url: &str) -> Result<Option<String>, Box<dyn std::error::Error>> 
 fn latex_escape(text: String) -> String {
     let url_regex = Regex::new(r"https?://[^\s]+").expect("Invalid URL regex");
     let urls: Vec<&str> = url_regex.find_iter(&text).map(|m| m.as_str()).collect();
-
-    // A map to hold the URL to title mappings
     let mut url_to_title = std::collections::HashMap::new();
 
-    // Fetch titles for each URL
+    // Define a list of undesired strings in titles
+    let undesired_titles = vec![
+        "Page Not Found",
+        "Access Denied",
+        "Access to this page has been denied",
+        "404",
+        "404 not found",
+        "Update Your Browser | Facebook",
+        "403 Forbidden",
+        "400 Bad Request",
+        "Blocked",
+    ];
+
     for &url in &urls {
         if let Ok(Some(title)) = fetch_title(url) {
-            // Simplify the title by replacing newlines and tabs with spaces
-            let simplified_title = title.replace('\n', " ").replace('\t', " ");
-            url_to_title.insert(url, simplified_title);
+            // Check if the title contains any of the undesired strings
+            if !undesired_titles
+                .iter()
+                .any(|&undesired| title.contains(undesired))
+            {
+                // Simplify the title by replacing newlines and tabs with spaces
+                let simplified_title = title.replace('\n', " ").replace('\t', " ");
+                url_to_title.insert(url, simplified_title);
+            }
         }
     }
 
-    // Replace URLs with their titles in the text
     let escaped = url_regex
         .replace_all(&text, |caps: &regex::Captures| {
             let url = &caps[0];
