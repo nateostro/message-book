@@ -27,6 +27,68 @@ mod render;
 
 const TEMPLATE_DIR: &str = "templates";
 
+use serde::Serialize;
+
+#[derive(Serialize)]
+struct SerializableMessage {
+    pub rowid: i32,
+    pub guid: String,
+    pub text: Option<String>,
+    pub service: Option<String>,
+    pub handle_id: Option<i32>,
+    pub subject: Option<String>,
+    pub date: i64,
+    pub date_read: i64,
+    pub date_delivered: i64,
+    pub is_from_me: bool,
+    pub is_read: bool,
+    pub item_type: i32,
+    pub group_title: Option<String>,
+    pub group_action_type: i32,
+    pub associated_message_guid: Option<String>,
+    pub associated_message_type: Option<i32>,
+    pub balloon_bundle_id: Option<String>,
+    pub expressive_send_style_id: Option<String>,
+    pub thread_originator_guid: Option<String>,
+    pub thread_originator_part: Option<String>,
+    pub date_edited: i64,
+    pub chat_id: Option<i32>,
+    pub num_attachments: i32,
+    pub deleted_from: Option<i32>,
+    pub num_replies: i32,
+}
+impl From<&imessage_database::tables::messages::Message> for SerializableMessage {
+    fn from(msg: &imessage_database::tables::messages::Message) -> Self {
+        SerializableMessage {
+            rowid: msg.rowid,
+            guid: msg.guid.clone(),
+            text: msg.text.clone(),
+            service: msg.service.clone(),
+            handle_id: msg.handle_id,
+            subject: msg.subject.clone(),
+            date: msg.date,
+            date_read: msg.date_read,
+            date_delivered: msg.date_delivered,
+            is_from_me: msg.is_from_me,
+            is_read: msg.is_read,
+            item_type: msg.item_type,
+            group_title: msg.group_title.clone(),
+            group_action_type: msg.group_action_type,
+            associated_message_guid: msg.associated_message_guid.clone(),
+            associated_message_type: msg.associated_message_type,
+            balloon_bundle_id: msg.balloon_bundle_id.clone(),
+            expressive_send_style_id: msg.expressive_send_style_id.clone(),
+            thread_originator_guid: msg.thread_originator_guid.clone(),
+            thread_originator_part: msg.thread_originator_part.clone(),
+            date_edited: msg.date_edited,
+            chat_id: msg.chat_id,
+            num_attachments: msg.num_attachments,
+            deleted_from: msg.deleted_from,
+            num_replies: msg.num_replies,
+        }
+    }
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct Config {
     title: String,
@@ -158,8 +220,19 @@ fn iter_messages(
     // need to create output dir first, so we can create files inside it
     create_dir_all(output_dir).expect("Could not create output directory");
 
-    let filtered_msgs =
-        msgs.filter(|m| !m.is_reaction() && !m.is_announcement() && !m.is_shareplay());
+    // Collect filtered messages into a Vec to avoid consuming `msgs`
+    let filtered_msgs: Vec<Message> = msgs
+        .filter(|m| !m.is_reaction() && !m.is_announcement() && !m.is_shareplay())
+        .collect();
+
+    let serializable_msgs: Vec<SerializableMessage> = filtered_msgs
+        .iter() // Use iter() to avoid moving `filtered_msgs`
+        .map(SerializableMessage::from)
+        .collect();
+    let messages_json =
+        serde_json::to_string(&serializable_msgs).expect("Failed to serialize messages");
+    let json_path = output_dir.join("messages.json");
+    std::fs::write(json_path, messages_json).expect("Failed to write messages.json");
 
     let mut chapters: Vec<String> = vec![];
     let mut current_output_info: Option<(String, File)> = None;
@@ -196,14 +269,12 @@ fn iter_messages(
             // last_message_side = None; // Reset for each new chapter
         }
 
-        // Determine if \insertextraspace should be inserted
         let insert_extra_space = false; //last_message_side == Some(msg.is_from_me);
                                         // last_message_side = Some(msg.is_from_me); // Update last message side
 
         match msg.gen_text(&db) {
             Ok(_) => {
-                // Adjust the call to render_message to pass the new parameter
-                let rendered = render_message(&msg, insert_extra_space); // Adjusted to pass insert_extra_space
+                let rendered = render_message(&msg, insert_extra_space);
                 let mut output_file = &current_output_info
                     .as_ref()
                     .expect("Current output info was none while processing message")
